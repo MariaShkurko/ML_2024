@@ -204,7 +204,7 @@ class BaseDescent:
 
         match self.loss_function:
             case LossFunction.MSE:
-                return np.mean(np.power(y - x @ self.w), 2)
+                return np.mean(np.power(y - x @ self.w, 2))
             case LossFunction.MAE:
                 return np.mean(np.absolute(y - x @ self.w))
             case LossFunction.LogCosh:
