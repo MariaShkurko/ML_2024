@@ -104,6 +104,8 @@ class BaseDescent:
         Вычисление прогнозов на основе признаков x.
     """
 
+    delta: float = 1
+
     def __init__(self, dimension: int, lambda_: float = 1e-3, loss_function: LossFunction = LossFunction.MSE):
         """
         Инициализация базового класса для градиентного спуска.
@@ -199,7 +201,20 @@ class BaseDescent:
         float
             Значение функции потерь.
         """
-        raise NotImplementedError('BaseDescent calc_loss function not implemented')
+
+        match self.loss_function:
+            case LossFunction.MSE:
+                return np.mean(np.power(y - x @ self.w), 2)
+            case LossFunction.MAE:
+                return np.mean(np.absolute(y - x @ self.w))
+            case LossFunction.LogCosh:
+                return np.mean(np.log(np.cosh(y - x @ self.w)))
+            case LossFunction.Huber:
+                return np.mean(np.where(np.absolute(y - x @ self.w) < self.delta,
+                                        0.5 * np.power(y - x @ self.w, 2),
+                                        self.delta * (np.absolute(y - x @ self.w) - 0.5 * self.delta)))
+            case _:
+                raise NotImplementedError('BaseDescent calc_loss function not implemented')
 
     def predict(self, x: np.ndarray) -> np.ndarray:
         """
@@ -215,7 +230,7 @@ class BaseDescent:
         np.ndarray
             Прогнозируемые значения.
         """
-        raise NotImplementedError('BaseDescent predict function not implemented')
+        return x @ self.w
 
 
 class VanillaGradientDescent(BaseDescent):
@@ -244,7 +259,9 @@ class VanillaGradientDescent(BaseDescent):
         np.ndarray
             Разность весов (w_{k + 1} - w_k).
         """
-        raise NotImplementedError('VanillaGradientDescent update_weights function not implemented')
+        diff = self.lr() * gradient
+        self.w = self.w - diff
+        return -diff
 
     def calc_gradient(self, x: np.ndarray, y: np.ndarray) -> np.ndarray:
         """
@@ -262,7 +279,18 @@ class VanillaGradientDescent(BaseDescent):
         np.ndarray
             Градиент функции потерь по весам.
         """
-        raise NotImplementedError('VanillaGradientDescent calc_gradient function not implemented')
+        
+        match self.loss_function:
+            case LossFunction.MSE:
+                return 2 / len(y) * (x.T @ x @ self.w - x.T @ y)
+            case LossFunction.MAE:
+                return
+            case LossFunction.LogCosh:
+                return
+            case LossFunction.Huber:
+                return
+            case _:
+                raise NotImplementedError('BaseDescent calc_loss function not implemented')
 
 
 class StochasticDescent(VanillaGradientDescent):
@@ -307,7 +335,19 @@ class StochasticDescent(VanillaGradientDescent):
         np.ndarray
             Градиент функции потерь по весам, вычисленный по мини-пакету.
         """
-        raise NotImplementedError('StochasticDescent calc_gradient function not implemented')
+        batch = np.random.randint(0, len(y), size=self.batch_size)
+        
+        match self.loss_function:
+            case LossFunction.MSE:
+                return 2 / len(batch) * (x[batch].T @ x[batch] @ self.w - x[batch].T @ y[batch])
+            case LossFunction.MAE:
+                return
+            case LossFunction.LogCosh:
+                return
+            case LossFunction.Huber:
+                return
+            case _:
+                raise NotImplementedError('BaseDescent calc_loss function not implemented')
 
 
 class MomentumDescent(VanillaGradientDescent):
@@ -368,8 +408,9 @@ class MomentumDescent(VanillaGradientDescent):
         np.ndarray
             Разность весов (w_{k + 1} - w_k).
         """
-        # TODO: implement updating weights function
-        raise NotImplementedError('MomentumDescent update_weights function not implemented')
+        self.h = self.alpha * self.h + self.lr() * gradient
+        self.w = self.w - self.h
+        return -self.h
 
 
 class Adam(VanillaGradientDescent):
@@ -444,7 +485,19 @@ class Adam(VanillaGradientDescent):
         np.ndarray
             Разность весов (w_{k + 1} - w_k).
         """
-        raise NotImplementedError('Adagrad update_weights function not implemented')
+        self.iteration += 1
+
+        self.m = self.beta_1 * self.m + (1 - self.beta_1) * gradient
+        self.v = self.beta_2 * self.v + (1 - self.beta_2) * gradient
+
+        m_hat = self.m / (1 - self.beta_1 ** self.iteration)
+        v_hat = self.v / (1 - self.beta_2 ** self.iteration)
+
+        diff = self.lr() * m_hat / (np.square(v_hat) + self.eps)
+
+        self.w = self.w - diff
+
+        return -diff
 
 
 class BaseDescentReg(BaseDescent):
